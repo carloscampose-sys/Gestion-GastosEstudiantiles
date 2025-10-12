@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Gastos Estudiantiles</title>
+    <link rel="stylesheet" href="menu.css">
+</head>
+<body>
+    <header id="main-header">
+        <div class="header-content">
+            <div class="left-section">
+                <img src="assets/images/logo.jpg" alt="Logo Colegio La Pontificia" class="logo">
+                <h1>Gestión de Gastos Estudiantiles</h1>
+            </div>
+            <div class="right-section">
+                <div class="hamburger-menu" id="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <nav class="dropdown-menu" id="dropdown-menu">
+                    <a href="index.html">Inicio</a>
+                    <a href="dashboard.html">Dashboard</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <nav class="month-navigator">
+        <button id="prev-month">&larr;</button>
+        <span id="current-month"></span>
+        <button id="next-month">&rarr;</button>
+    </nav>
+    <section id="monthly-budget">
+        <h2>Presupuesto Mensual</h2>
+        <div class="budget-input-group">
+            <label for="budget-amount">Monto del presupuesto (S/):</label>
+            <input type="number" id="budget-amount" min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div class="budget-buttons">
+            <button id="budget-action">Guardar Presupuesto</button>
+            <button id="cancel-edit" style="display:none;">Cancelar</button>
+        </div>
+        <div id="budget-message"></div>
+    </section>
+    <section id="monthly-summary">
+        <h2>Resumen del Mes</h2>
+        <div class="chart-container">
+            <canvas id="budget-chart"></canvas>
+        </div>
+        <div class="summary-text">
+            <p>Presupuesto Total: <span id="total-budget">S/ 0.00</span></p>
+            <p>Disponible: <span id="available-budget">S/ 0.00</span></p>
+            <p>Gastado: <span id="spent-budget">S/ 0.00</span></p>
+        </div>
+    </section>
+    <section id="expense-history">
+        <h2>Historial de Gastos</h2>
+        <div class="filter-group">
+            <label for="category-filter">Filtrar por categoría:</label>
+            <select id="category-filter">
+                <option value="all">Todas las categorías</option>
+            </select>
+        </div>
+        <div id="expense-cards" class="expense-cards"></div>
+    </section>
+    <!-- Botón flotante para agregar gasto -->
+    <button id="add-expense-btn" class="floating-btn">+</button>
+
+    <!-- Modal para agregar gasto -->
+    <div id="expense-modal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <h2>Agregar Nuevo Gasto</h2>
+            <form id="expense-form">
+                <label for="expense-name">Nombre del gasto:</label>
+                <input type="text" id="expense-name" placeholder="Ej: Café en Starbucks" required>
+
+                <label for="expense-amount">Monto (S/):</label>
+                <input type="number" id="expense-amount" min="0" step="0.01" value="0.00" required>
+
+                <label for="expense-category">Categoría:</label>
+                <select id="expense-category" required>
+                    <option value="" disabled selected>Seleccionar categoría</option>
+                    <option value="AHORRO">AHORRO</option>
+                    <option value="QUIOSCO">QUIOSCO</option>
+                    <option value="MATERIALES DE ESTUDIO">MATERIALES DE ESTUDIO</option>
+                    <option value="TRANSPORTE">TRANSPORTE</option>
+                    <option value="ENTRETENIMIENTO">ENTRETENIMIENTO</option>
+                    <option value="GASTOS VARIOS">GASTOS VARIOS</option>
+                </select>
+
+                <label for="expense-date">Fecha:</label>
+                <input type="date" id="expense-date" required>
+
+                <div class="modal-buttons">
+                    <button type="submit" id="submit-expense">Agregar Gasto</button>
+                    <button type="button" id="cancel-expense">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+            let currentDate = new Date();
+            let isEditing = false;
+            let totalSpent = 0; // Suma de gastos del mes, inicialmente 0
+            let editingIndex = -1;
+
+        const expensesKey = () => `expenses-${currentDate.getMonth()}-${currentDate.getFullYear()}`;
+
+        function loadExpenses() {
+            const key = expensesKey();
+            const expenses = JSON.parse(localStorage.getItem(key) || '[]');
+            totalSpent = expenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
+        }
+
+        const budgetKey = () => `monthly-budget-${currentDate.getMonth()}-${currentDate.getFullYear()}`;
+
+        function loadBudget() {
+            const key = budgetKey();
+            const amount = localStorage.getItem(key);
+            const input = document.getElementById('budget-amount');
+            if (amount) {
+                input.value = amount;
+            } else {
+                input.value = '';
+            }
+            updateButton();
+            updateSummary();
+        }
+
+        function updateButton() {
+            const actionBtn = document.getElementById('budget-action');
+            const cancelBtn = document.getElementById('cancel-edit');
+            const input = document.getElementById('budget-amount');
+            const hasBudget = localStorage.getItem(budgetKey()) !== null;
+
+            if (hasBudget && !isEditing) {
+                actionBtn.textContent = 'Modificar Presupuesto';
+                actionBtn.style.backgroundColor = '#007bff';
+                cancelBtn.style.display = 'none';
+                input.disabled = true;
+            } else if (isEditing) {
+                actionBtn.textContent = 'Actualizar Presupuesto';
+                actionBtn.style.backgroundColor = '#28a745';
+                cancelBtn.style.display = 'inline-block';
+                input.disabled = false;
+            } else {
+                actionBtn.textContent = 'Guardar Presupuesto';
+                actionBtn.style.backgroundColor = '#28a745';
+                cancelBtn.style.display = 'none';
+                input.disabled = false;
+            }
+        }
+
+        function updateSummary() {
+            const budget = parseFloat(localStorage.getItem(budgetKey()) || 0);
+            const available = Math.max(0, budget - totalSpent);
+            const spentPercent = budget > 0 ? Math.round(totalSpent / budget * 100) : 0;
+
+            // Calculate dynamic color for spent portion: green to red transition
+            const hue = Math.max(0, 120 - (spentPercent * 1.2)); // 120 (green) to 0 (red)
+            const spentColor = `hsl(${hue}, 70%, 50%)`;
+
+            // Update text
+            document.getElementById('total-budget').textContent = `S/ ${budget.toFixed(2)}`;
+            document.getElementById('available-budget').textContent = `S/ ${available.toFixed(2)}`;
+            document.getElementById('spent-budget').textContent = `S/ ${totalSpent.toFixed(2)}`;
+
+            // Update chart
+            const ctx = document.getElementById('budget-chart').getContext('2d');
+            const data = {
+                datasets: [{
+                    data: totalSpent > 0 ? [totalSpent, available] : [1, 0], // If no spent, show full green
+                    backgroundColor: totalSpent > 0 ? [spentColor, '#28a745'] : ['#28a745', '#28a745'],
+                    borderWidth: 0
+                }]
+            };
+            const config = {
+                type: 'doughnut',
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: false }
+                    },
+                    cutout: '70%'
+                },
+                plugins: [{
+                    id: 'centerText',
+                    beforeDraw: function(chart) {
+                        const width = chart.width, height = chart.height, ctx = chart.ctx;
+                        ctx.restore();
+                        const fontSize = (height / 114).toFixed(2);
+                        ctx.font = fontSize + "em sans-serif";
+                        ctx.textBaseline = "middle";
+                        const text = spentPercent + "%",
+                            textX = Math.round((width - ctx.measureText(text).width) / 2),
+                            textY = height / 2;
+                        ctx.fillStyle = '#003366';
+                        ctx.fillText(text, textX, textY);
+                        const label = "gastado";
+                        ctx.font = (fontSize * 0.6) + "em sans-serif";
+                        const labelX = Math.round((width - ctx.measureText(label).width) / 2),
+                            labelY = height / 2 + 20;
+                        ctx.fillText(label, labelX, labelY);
+                        ctx.save();
+                    }
+                }]
+            };
+            if (window.budgetChart) window.budgetChart.destroy();
+            window.budgetChart = new Chart(ctx, config);
+        }
+
+        function populateCategoryFilter() {
+            const expenses = JSON.parse(localStorage.getItem(expensesKey()) || '[]');
+            const categories = [...new Set(expenses.map(exp => exp.category))].sort();
+            const select = document.getElementById('category-filter');
+            select.innerHTML = '<option value="all">Todas las categorías</option>';
+            categories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat;
+                option.textContent = cat;
+                select.appendChild(option);
+            });
+        }
+
+        function renderExpenseHistory(filter = 'all') {
+            const expenses = JSON.parse(localStorage.getItem(expensesKey()) || '[]');
+            let filtered = filter === 'all' ? expenses : expenses.filter(e => e.category === filter);
+            // Group by category
+            const grouped = {};
+            filtered.forEach(exp => {
+                if (!grouped[exp.category]) grouped[exp.category] = [];
+                grouped[exp.category].push(exp);
+            });
+            // Sort categories alphabetically
+            const categories = Object.keys(grouped).sort();
+            // Sort expenses within each category by date descending
+            categories.forEach(cat => {
+                grouped[cat].sort((a, b) => new Date(b.date) - new Date(a.date));
+            });
+            const cardsContainer = document.getElementById('expense-cards');
+            cardsContainer.innerHTML = '';
+            if (categories.length === 0) {
+                cardsContainer.innerHTML = '<p>No hay gastos registrados</p>';
+                return;
+            }
+            categories.forEach(cat => {
+                const catDiv = document.createElement('div');
+                catDiv.className = 'category-group';
+                catDiv.innerHTML = `<h3>${cat}</h3>`;
+                const cardsDiv = document.createElement('div');
+                cardsDiv.className = 'expense-cards';
+                grouped[cat].forEach(exp => {
+                    const index = expenses.indexOf(exp);
+                    const [year, month, day] = exp.date.split('-');
+                    const formattedDate = `${day}/${month}/${year}`;
+                    const card = document.createElement('div');
+                    card.className = 'expense-card';
+                    card.innerHTML = `
+                        <div class="expense-info">
+                            <div class="name">${exp.name}</div>
+                            <div class="date">${formattedDate}</div>
+                            <div class="amount">S/ ${parseFloat(exp.amount).toFixed(2)}</div>
+                        </div>
+                        <div class="expense-actions">
+                            <button class="edit-btn" data-index="${index}" aria-label="Editar gasto">Editar</button>
+                            <button class="delete-btn" data-index="${index}" aria-label="Eliminar gasto">Eliminar</button>
+                        </div>
+                    `;
+                    cardsDiv.appendChild(card);
+                });
+                catDiv.appendChild(cardsDiv);
+                cardsContainer.appendChild(catDiv);
+            });
+        }
+
+        function updateMonthDisplay() {
+            const monthName = months[currentDate.getMonth()];
+            const year = currentDate.getFullYear();
+            document.getElementById('current-month').textContent = `${monthName} ${year}`;
+            isEditing = false;
+            loadExpenses();
+            loadBudget();
+            populateCategoryFilter();
+            renderExpenseHistory();
+        }
+
+        document.getElementById('prev-month').addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() - 1);
+            updateMonthDisplay();
+        });
+
+        document.getElementById('next-month').addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            updateMonthDisplay();
+        });
+
+        // Event listeners para el presupuesto
+        document.getElementById('budget-action').addEventListener('click', () => {
+            const input = document.getElementById('budget-amount');
+            const value = parseFloat(input.value);
+            const messageDiv = document.getElementById('budget-message');
+
+            if (isNaN(value) || value <= 0) {
+                messageDiv.textContent = 'Por favor ingrese un monto válido mayor a 0.';
+                messageDiv.style.color = 'red';
+                return;
+            }
+
+            const hasBudget = localStorage.getItem(budgetKey()) !== null;
+            if (!isEditing && hasBudget) {
+                // Modificar
+                isEditing = true;
+                updateButton();
+                messageDiv.textContent = '';
+            } else {
+                // Guardar o actualizar
+                localStorage.setItem(budgetKey(), value.toFixed(2));
+                messageDiv.textContent = 'Presupuesto guardado exitosamente.';
+                messageDiv.style.color = '#28a745';
+                isEditing = false;
+                loadBudget();
+            }
+        });
+
+        document.getElementById('cancel-edit').addEventListener('click', () => {
+            isEditing = false;
+            loadBudget();
+            document.getElementById('budget-message').textContent = '';
+        });
+
+        // Event listeners para el modal de gastos
+        document.getElementById('add-expense-btn').addEventListener('click', () => {
+            editingIndex = -1;
+            document.getElementById('expense-modal').style.display = 'block';
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('expense-date').value = today;
+            document.getElementById('expense-form').reset();
+            document.getElementById('expense-modal').querySelector('h2').textContent = 'Agregar Nuevo Gasto';
+            document.getElementById('submit-expense').textContent = 'Agregar Gasto';
+        });
+
+        document.getElementById('cancel-expense').addEventListener('click', () => {
+            editingIndex = -1;
+            document.getElementById('expense-modal').querySelector('h2').textContent = 'Agregar Nuevo Gasto';
+            document.getElementById('submit-expense').textContent = 'Agregar Gasto';
+            document.getElementById('expense-modal').style.display = 'none';
+        });
+
+        document.getElementById('expense-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('expense-name').value.trim();
+            const amount = parseFloat(document.getElementById('expense-amount').value);
+            const category = document.getElementById('expense-category').value;
+            const date = document.getElementById('expense-date').value;
+
+            if (!name || isNaN(amount) || amount <= 0 || !category || !date) {
+                alert('Por favor complete todos los campos correctamente.');
+                return;
+            }
+
+            const expense = { name, amount: amount.toFixed(2), category, date };
+            const key = expensesKey();
+            const expenses = JSON.parse(localStorage.getItem(key) || '[]');
+            if (editingIndex >= 0) {
+                expenses[editingIndex] = expense;
+            } else {
+                expenses.push(expense);
+            }
+            localStorage.setItem(key, JSON.stringify(expenses));
+
+            loadExpenses();
+            updateSummary();
+            populateCategoryFilter();
+            renderExpenseHistory();
+            document.getElementById('expense-modal').querySelector('h2').textContent = 'Agregar Nuevo Gasto';
+            document.getElementById('submit-expense').textContent = 'Agregar Gasto';
+            editingIndex = -1;
+            document.getElementById('expense-modal').style.display = 'none';
+        });
+
+        // Event listener para el menú hamburger
+        document.getElementById('hamburger-menu').addEventListener('click', () => {
+            const menu = document.getElementById('dropdown-menu');
+            menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+        });
+
+        // Event listener para el filtro de categorías
+        document.getElementById('category-filter').addEventListener('change', (e) => {
+            renderExpenseHistory(e.target.value);
+        });
+
+        // Event listeners para editar y eliminar gastos
+        document.getElementById('expense-cards').addEventListener('click', (e) => {
+            if (e.target.classList.contains('edit-btn')) {
+                editingIndex = parseInt(e.target.dataset.index);
+                const expenses = JSON.parse(localStorage.getItem(expensesKey()) || '[]');
+                const exp = expenses[editingIndex];
+                document.getElementById('expense-name').value = exp.name;
+                document.getElementById('expense-amount').value = exp.amount;
+                document.getElementById('expense-category').value = exp.category;
+                document.getElementById('expense-date').value = exp.date;
+                document.getElementById('expense-modal').querySelector('h2').textContent = 'Editar Gasto';
+                document.getElementById('submit-expense').textContent = 'Actualizar Gasto';
+                document.getElementById('expense-modal').style.display = 'block';
+            } else if (e.target.classList.contains('delete-btn')) {
+                const index = parseInt(e.target.dataset.index);
+                if (confirm('¿Está seguro de que desea eliminar este gasto?')) {
+                    const key = expensesKey();
+                    const expenses = JSON.parse(localStorage.getItem(key) || '[]');
+                    expenses.splice(index, 1);
+                    localStorage.setItem(key, JSON.stringify(expenses));
+                    loadExpenses();
+                    updateSummary();
+                    populateCategoryFilter();
+                    renderExpenseHistory(document.getElementById('category-filter').value);
+                }
+            }
+        });
+
+        // Inicializar con el mes actual
+        updateMonthDisplay();
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</body>
+</html>

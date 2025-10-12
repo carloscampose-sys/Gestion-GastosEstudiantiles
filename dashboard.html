@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Gestión de Gastos Estudiantiles</title>
+    <link rel="stylesheet" href="menu.css">
+</head>
+<body>
+    <header id="main-header">
+        <div class="header-content">
+            <div class="left-section">
+                <img src="assets/images/logo.jpg" alt="Logo Colegio La Pontificia" class="logo">
+                <h1>Gestión de Gastos Estudiantiles</h1>
+            </div>
+            <div class="right-section">
+                <div class="hamburger-menu" id="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <nav class="dropdown-menu" id="dropdown-menu">
+                    <a href="index.html">Inicio</a>
+                    <a href="dashboard.html">Dashboard</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <nav class="month-navigator">
+        <button id="prev-month">&larr;</button>
+        <span id="current-month"></span>
+        <button id="next-month">&rarr;</button>
+    </nav>
+    <section id="expense-distribution">
+        <h2>Distribución de Gastos</h2>
+        <div class="metrics">
+            <div class="metric">
+                <h3>Total Gastado</h3>
+                <p id="total-spent">S/ 0.00</p>
+            </div>
+            <div class="metric">
+                <h3>Cantidad de Categorías</h3>
+                <p id="categories-count">0</p>
+            </div>
+            <div class="metric">
+                <h3>Cantidad de Gastos</h3>
+                <p id="expenses-count">0</p>
+            </div>
+        </div>
+        <div class="chart-section">
+            <canvas id="distribution-chart"></canvas>
+        </div>
+        <div class="breakdown">
+            <h3>Desglose por Categoría</h3>
+            <ul id="category-list"></ul>
+            <a href="index.html" class="expand-link">Ver detalles completos</a>
+        </div>
+    </section>
+    <section id="top-expenses-chart">
+        <h2>Principales 5 Gastos del Mes</h2>
+        <div class="chart-container">
+            <canvas id="top-expenses-canvas" aria-label="Gráfico de barras mostrando los 5 gastos más altos del mes"></canvas>
+        </div>
+        <div id="top-expenses-message"></div>
+    </section>
+    <section id="daily-expenses-chart">
+        <h2>Gastos Diarios de la Semana Actual</h2>
+        <div class="chart-container">
+            <canvas id="daily-expenses-canvas" aria-label="Gráfico de barras mostrando los gastos diarios de la semana actual"></canvas>
+        </div>
+        <div id="daily-expenses-message"></div>
+    </section>
+    <!-- Botón flotante para agregar gasto -->
+    <button id="add-expense-btn" class="floating-btn">+</button>
+
+    <!-- Modal para agregar gasto -->
+    <div id="expense-modal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <h2>Agregar Nuevo Gasto</h2>
+            <form id="expense-form">
+                <label for="expense-name">Nombre del gasto:</label>
+                <input type="text" id="expense-name" placeholder="Ej: Café en Starbucks" required>
+
+                <label for="expense-amount">Monto (S/):</label>
+                <input type="number" id="expense-amount" min="0" step="0.01" value="0.00" required>
+
+                <label for="expense-category">Categoría:</label>
+                <select id="expense-category" required>
+                    <option value="" disabled selected>Seleccionar categoría</option>
+                    <option value="AHORRO">AHORRO</option>
+                    <option value="QUIOSCO">QUIOSCO</option>
+                    <option value="MATERIALES DE ESTUDIO">MATERIALES DE ESTUDIO</option>
+                    <option value="TRANSPORTE">TRANSPORTE</option>
+                    <option value="ENTRETENIMIENTO">ENTRETENIMIENTO</option>
+                    <option value="GASTOS VARIOS">GASTOS VARIOS</option>
+                </select>
+
+                <label for="expense-date">Fecha:</label>
+                <input type="date" id="expense-date" required>
+
+                <div class="modal-buttons">
+                    <button type="submit" id="submit-expense">Agregar Gasto</button>
+                    <button type="button" id="cancel-expense">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+            let currentDate = new Date();
+
+        const expensesKey = () => `expenses-${currentDate.getMonth()}-${currentDate.getFullYear()}`;
+
+        function updateMonthDisplay() {
+            const monthName = months[currentDate.getMonth()];
+            const year = currentDate.getFullYear();
+            document.getElementById('current-month').textContent = `${monthName} ${year}`;
+            renderExpenseDistribution();
+        }
+
+        function renderExpenseDistribution() {
+            const expenses = JSON.parse(localStorage.getItem(expensesKey()) || '[]');
+            const totalSpent = expenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
+            const categoriesCount = new Set(expenses.map(exp => exp.category)).size;
+            const expensesCount = expenses.length;
+
+            // Update metrics
+            document.getElementById('total-spent').textContent = `S/ ${totalSpent.toFixed(2)}`;
+            document.getElementById('categories-count').textContent = categoriesCount;
+            document.getElementById('expenses-count').textContent = expensesCount;
+
+            if (expenses.length === 0) {
+                document.getElementById('distribution-chart').style.display = 'none';
+                document.getElementById('category-list').innerHTML = '<li>No hay gastos registrados este mes</li>';
+                return;
+            }
+
+            document.getElementById('distribution-chart').style.display = 'block';
+
+            // Group by category
+            const grouped = {};
+            expenses.forEach(exp => {
+                if (!grouped[exp.category]) grouped[exp.category] = 0;
+                grouped[exp.category] += parseFloat(exp.amount);
+            });
+
+            // Prepare data for chart
+            const categories = Object.keys(grouped).sort();
+            const data = categories.map(cat => grouped[cat]);
+            const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+
+            const ctx = document.getElementById('distribution-chart').getContext('2d');
+            if (window.distributionChart) window.distributionChart.destroy();
+            window.distributionChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: categories,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: colors.slice(0, categories.length),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true, position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return 'S/ ' + context.parsed.toFixed(2);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Prepare breakdown list
+            const sortedCategories = categories.sort((a, b) => grouped[b] - grouped[a]);
+            const list = document.getElementById('category-list');
+            list.innerHTML = '';
+            sortedCategories.forEach(cat => {
+                const percentage = ((grouped[cat] / totalSpent) * 100).toFixed(1);
+                const li = document.createElement('li');
+                li.innerHTML = `<span>${cat}</span><span>S/ ${grouped[cat].toFixed(2)} (${percentage}%)</span>`;
+                list.appendChild(li);
+            });
+
+            // Render top expenses chart
+            renderTopExpensesChart(expenses);
+
+            // Render daily expenses chart
+            renderDailyExpensesChart(expenses);
+        }
+
+        function renderTopExpensesChart(expenses) {
+            const messageEl = document.getElementById('top-expenses-message');
+            messageEl.textContent = '';
+
+            if (expenses.length < 5) {
+                messageEl.textContent = 'No hay suficientes gastos registrados para mostrar los principales 5. Registra más gastos para ver este gráfico.';
+                return;
+            }
+
+            // Sort expenses by amount descending
+            const sortedExpenses = expenses.sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount)).slice(0, 5);
+
+            const labels = sortedExpenses.map(exp => exp.name.length > 20 ? exp.name.substring(0, 20) + '...' : exp.name);
+            const data = sortedExpenses.map(exp => parseFloat(exp.amount));
+            const colors = ['#0000FF', '#4000BF', '#80007F', '#BF0040', '#FF0000']; // gradiente azul a rojo
+
+            const ctx = document.getElementById('top-expenses-canvas').getContext('2d');
+            if (window.topExpensesChart) {
+                window.topExpensesChart.destroy();
+            }
+
+            try {
+                window.topExpensesChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: data,
+                            backgroundColor: colors.slice(0, data.length),
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const index = context.dataIndex;
+                                        const exp = sortedExpenses[index];
+                                        return [
+                                            `Descripción: ${exp.name}`,
+                                            `Monto: S/ ${parseFloat(exp.amount).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`,
+                                            `Fecha: ${exp.date}`
+                                        ];
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return 'S/ ' + value.toLocaleString('es-PE', { minimumFractionDigits: 2 });
+                                    }
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    display: window.innerWidth > 768
+                                }
+                            }
+                        },
+                        animation: {
+                            duration: 1000,
+                            easing: 'easeOutQuart'
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Error al cargar el gráfico:', error);
+                messageEl.textContent = 'Error al cargar el gráfico. Inténtalo de nuevo más tarde.';
+            }
+        }
+
+        function getCurrentWeekDates() {
+            const now = new Date();
+            const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+            const monday = new Date(now);
+            monday.setDate(now.getDate() - currentDay + 1); // Monday of current week
+
+            const weekDates = [];
+            for (let i = 0; i < 7; i++) {
+                const date = new Date(monday);
+                date.setDate(monday.getDate() + i);
+                weekDates.push(date.toISOString().split('T')[0]);
+            }
+            return weekDates;
+        }
+
+        function getDailyExpensesForWeek(expenses, weekDates) {
+            const dailyExpenses = new Array(7).fill(0);
+            const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+            expenses.forEach(exp => {
+                const expenseDate = exp.date;
+                const dayIndex = weekDates.indexOf(expenseDate);
+                if (dayIndex !== -1) {
+                    dailyExpenses[dayIndex] += parseFloat(exp.amount);
+                }
+            });
+
+            return { dailyExpenses, dayNames };
+        }
+
+        function isLastDayOfMonth() {
+            const now = new Date();
+            const nextDay = new Date(now);
+            nextDay.setDate(now.getDate() + 1);
+            return now.getMonth() !== nextDay.getMonth();
+        }
+
+        function shouldUpdateDailyChart() {
+            const now = new Date();
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
+
+            // If we're in a different month than the dashboard month, don't update
+            if (currentMonth !== currentDate.getMonth() || currentYear !== currentDate.getFullYear()) {
+                return false;
+            }
+
+            // If it's the last day of the month, stop updating
+            return !isLastDayOfMonth();
+        }
+
+        function renderDailyExpensesChart(expenses) {
+            const messageEl = document.getElementById('daily-expenses-message');
+            messageEl.textContent = '';
+
+            if (!shouldUpdateDailyChart()) {
+                messageEl.textContent = 'El gráfico se ha congelado al finalizar el mes.';
+                return;
+            }
+
+            const weekDates = getCurrentWeekDates();
+            const { dailyExpenses, dayNames } = getDailyExpensesForWeek(expenses, weekDates);
+
+            const ctx = document.getElementById('daily-expenses-canvas').getContext('2d');
+            if (window.dailyExpensesChart) {
+                window.dailyExpensesChart.destroy();
+            }
+
+            try {
+                window.dailyExpensesChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: dayNames,
+                        datasets: [{
+                            label: 'Gastos Diarios (S/)',
+                            data: dailyExpenses,
+                            backgroundColor: '#36A2EB',
+                            borderColor: '#36A2EB',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return 'S/ ' + context.parsed.y.toLocaleString('es-PE', { minimumFractionDigits: 2 });
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return 'S/ ' + value.toLocaleString('es-PE', { minimumFractionDigits: 2 });
+                                    }
+                                }
+                            }
+                        },
+                        animation: {
+                            duration: 800,
+                            easing: 'easeOutQuart'
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Error al cargar el gráfico de gastos diarios:', error);
+                messageEl.textContent = 'Error al cargar el gráfico de gastos diarios.';
+            }
+        }
+
+        document.getElementById('prev-month').addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() - 1);
+            updateMonthDisplay();
+        });
+
+        document.getElementById('next-month').addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            updateMonthDisplay();
+        });
+
+        // Event listeners para el modal de gastos
+        document.getElementById('add-expense-btn').addEventListener('click', () => {
+            document.getElementById('expense-modal').style.display = 'block';
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('expense-date').value = today;
+            document.getElementById('expense-form').reset();
+        });
+
+        document.getElementById('cancel-expense').addEventListener('click', () => {
+            document.getElementById('expense-modal').style.display = 'none';
+        });
+
+        document.getElementById('expense-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('expense-name').value.trim();
+            const amount = parseFloat(document.getElementById('expense-amount').value);
+            const category = document.getElementById('expense-category').value;
+            const date = document.getElementById('expense-date').value;
+
+            if (!name || isNaN(amount) || amount <= 0 || !category || !date) {
+                alert('Por favor complete todos los campos correctamente.');
+                return;
+            }
+
+            const expense = { name, amount: amount.toFixed(2), category, date };
+            const key = expensesKey();
+            const expenses = JSON.parse(localStorage.getItem(key) || '[]');
+            expenses.push(expense);
+            localStorage.setItem(key, JSON.stringify(expenses));
+
+            document.getElementById('expense-modal').style.display = 'none';
+            renderExpenseDistribution();
+        });
+
+        // Event listener para el menú hamburger
+        document.getElementById('hamburger-menu').addEventListener('click', () => {
+            const menu = document.getElementById('dropdown-menu');
+            menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+        });
+
+        // Inicializar con el mes actual
+        updateMonthDisplay();
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</body>
+</html>
