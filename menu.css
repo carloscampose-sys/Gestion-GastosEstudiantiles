@@ -828,3 +828,139 @@ body {
         max-width: 700px;
     }
 }
+
+/* Estilos para paginación en historial de gastos */
+.category-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 15px;
+    gap: 10px;
+}
+
+.category-pagination-btn {
+    background-color: #003366;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+}
+
+.category-pagination-btn:hover:not(:disabled) {
+    background-color: #0056b3;
+}
+
+.category-pagination-btn:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.category-pagination-info {
+    font-size: 12px;
+    color: #555;
+    margin: 0 5px;
+}
+
+/* Responsividad para paginación */
+@media (max-width: 768px) {
+    .category-pagination {
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .category-pagination-info {
+        order: -1;
+    }
+
+    .category-pagination-btn {
+        padding: 6px 10px;
+        font-size: 12px;
+    }
+}
+
+/* Estilos para el componente de consejos de ahorro */
+.savings-tips {
+    max-width: 1200px;
+    margin: 20px auto;
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.savings-tips h2 {
+    text-align: center;
+    color: #003366;
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+.tips-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 20px;
+}
+
+.tip-card {
+    background-color: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    text-align: center;
+}
+
+.tip-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.tip-icon {
+    font-size: 2rem;
+    margin-bottom: 10px;
+}
+
+.tip-card h3 {
+    color: #003366;
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+.tip-card p {
+    color: #555;
+    line-height: 1.5;
+    font-size: 0.9rem;
+}
+
+/* Responsividad para consejos */
+@media (max-width: 768px) {
+    .savings-tips {
+        padding: 15px;
+        margin: 15px auto;
+    }
+
+    .tips-container {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    .tip-card {
+        padding: 15px;
+    }
+
+    .tip-icon {
+        font-size: 1.5rem;
+    }
+
+    .tip-card h3 {
+        font-size: 1rem;
+    }
+
+    .tip-card p {
+        font-size: 0.85rem;
+    }
+}

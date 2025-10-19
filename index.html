@@ -22,6 +22,7 @@
                 <nav class="dropdown-menu" id="dropdown-menu">
                     <a href="index.html">Inicio</a>
                     <a href="dashboard.html">Dashboard</a>
+                    <a href="ahorros.html">Ahorros</a>
                 </nav>
             </div>
         </div>
@@ -260,7 +261,17 @@
                 catDiv.innerHTML = `<h3>${cat}</h3>`;
                 const cardsDiv = document.createElement('div');
                 cardsDiv.className = 'expense-cards';
-                grouped[cat].forEach(exp => {
+
+                // Paginación por categoría
+                const expensesInCategory = grouped[cat];
+                const itemsPerPage = 4;
+                const totalPages = Math.ceil(expensesInCategory.length / itemsPerPage);
+                const currentPage = parseInt(localStorage.getItem(`page-${cat}`) || '1');
+                const startIndex = (currentPage - 1) * itemsPerPage;
+                const endIndex = startIndex + itemsPerPage;
+                const expensesToShow = expensesInCategory.slice(startIndex, endIndex);
+
+                expensesToShow.forEach(exp => {
                     const index = expenses.indexOf(exp);
                     const [year, month, day] = exp.date.split('-');
                     const formattedDate = `${day}/${month}/${year}`;
@@ -279,6 +290,19 @@
                     `;
                     cardsDiv.appendChild(card);
                 });
+
+                // Agregar controles de paginación si hay más de 4 gastos
+                if (expensesInCategory.length > itemsPerPage) {
+                    const paginationDiv = document.createElement('div');
+                    paginationDiv.className = 'category-pagination';
+                    paginationDiv.innerHTML = `
+                        <button class="category-pagination-btn" data-category="${cat}" data-action="prev" aria-label="Página anterior para ${cat}" ${currentPage === 1 ? 'disabled' : ''}>&larr; Anterior</button>
+                        <span class="category-pagination-info">Página ${currentPage} de ${totalPages}</span>
+                        <button class="category-pagination-btn" data-category="${cat}" data-action="next" aria-label="Página siguiente para ${cat}" ${currentPage === totalPages ? 'disabled' : ''}>Siguiente &rarr;</button>
+                    `;
+                    catDiv.appendChild(paginationDiv);
+                }
+
                 catDiv.appendChild(cardsDiv);
                 cardsContainer.appendChild(catDiv);
             });
@@ -297,11 +321,19 @@
 
         document.getElementById('prev-month').addEventListener('click', () => {
             currentDate.setMonth(currentDate.getMonth() - 1);
+            // Resetear páginas de todas las categorías al cambiar mes
+            const expenses = JSON.parse(localStorage.getItem(expensesKey()) || '[]');
+            const categories = [...new Set(expenses.map(e => e.category))];
+            categories.forEach(cat => localStorage.removeItem(`page-${cat}`));
             updateMonthDisplay();
         });
 
         document.getElementById('next-month').addEventListener('click', () => {
             currentDate.setMonth(currentDate.getMonth() + 1);
+            // Resetear páginas de todas las categorías al cambiar mes
+            const expenses = JSON.parse(localStorage.getItem(expensesKey()) || '[]');
+            const categories = [...new Set(expenses.map(e => e.category))];
+            categories.forEach(cat => localStorage.removeItem(`page-${cat}`));
             updateMonthDisplay();
         });
 
@@ -443,6 +475,23 @@
                     populateCategoryFilter();
                     renderExpenseHistory(document.getElementById('category-filter').value);
                 }
+            } else if (e.target.classList.contains('category-pagination-btn')) {
+                const category = e.target.dataset.category;
+                const action = e.target.dataset.action;
+                const currentPage = parseInt(localStorage.getItem(`page-${category}`) || '1');
+                const expenses = JSON.parse(localStorage.getItem(expensesKey()) || '[]');
+                const expensesInCategory = expenses.filter(e => e.category === category);
+                const totalPages = Math.ceil(expensesInCategory.length / 4);
+
+                let newPage = currentPage;
+                if (action === 'prev' && currentPage > 1) {
+                    newPage = currentPage - 1;
+                } else if (action === 'next' && currentPage < totalPages) {
+                    newPage = currentPage + 1;
+                }
+
+                localStorage.setItem(`page-${category}`, newPage.toString());
+                renderExpenseHistory(document.getElementById('category-filter').value);
             }
         });
 
